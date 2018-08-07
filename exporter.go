@@ -3,8 +3,7 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
-	"io/ioutil"
-	"net"
+		"net"
 	"net/http"
 	_ "net/http/pprof"
 	"strconv"
@@ -241,41 +240,26 @@ func main() {
 	https://prometheus.io/docs/instrumenting/writing_clientlibs/#process-metrics.`
 
 	var (
-		listenAddress				= kingpin.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9362").String()
-		metricsPath					= kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
-		dellDiskStorageCabineIPs	= kingpin.Flag("dellDiskStorage.IPs", "Array Dell Cabine Storage. Example: '172.19.0.1 172.0.0.1'").Default("172.0.0.1").IPList()
-		dellDiskStorageSMcliPath	= kingpin.Flag("dellDiskStorage.BinPath", "SMcli binary path").Default("/opt/dell/mdstoragesoftware/mdstoragemanager/client/SMcli").String()
-		dellDiskStoragePidFile		= kingpin.Flag("dellDiskStorage.pid-file", pidFileHelpText).Default("").String()
+		listenAddress				= kingpin.Flag("listen-address", "Address to listen on for web interface and telemetry.").Default(":9362").String()
+		metricsPath					= kingpin.Flag("telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+		dellDiskStorageCabineIPs	= kingpin.Flag("IPs", "IPs Dell Cabine Storage. Example: '172.19.0.1 172.0.0.1'").Default("172.0.0.1").IPList()
+		dellDiskStorageSMcliPath	= kingpin.Flag("SMcliPath", "SMcli binary path").Default("/opt/dell/mdstoragesoftware/mdstoragemanager/client/SMcli").String()
+
 	)
 
+	// Check flags
 	log.AddFlags(kingpin.CommandLine)
 	kingpin.Version(version.Print("dellDiskStorage-exporter"))
 	kingpin.HelpFlag.Short('d')
 	kingpin.Parse()
 
-	physicalDisksPerformance(dellDiskStorageSMcliPath, dellDiskStorageCabineIPs)
-	virtualDisksPerformance(dellDiskStorageSMcliPath, dellDiskStorageCabineIPs)
-
+	// Log Start
 	log.Infoln("Starting dellDiskStorage-exporterr", version.Info())
 	log.Infoln("Build context", version.BuildContext())
 
-
-	// Check Pid File
-	if *dellDiskStoragePidFile != "" {
-		procExporter := prometheus.NewProcessCollectorPIDFn(
-			func() (int, error) {
-				content, err := ioutil.ReadFile(*dellDiskStoragePidFile)
-				if err != nil {
-					return 0, fmt.Errorf("Can't read pid file: %s", err)
-				}
-				value, err := strconv.Atoi(strings.TrimSpace(string(content)))
-				if err != nil {
-					return 0, fmt.Errorf("Can't parse pid file: %s", err)
-				}
-				return value, nil
-			}, namespace)
-		prometheus.MustRegister(procExporter)
-	}
+	// Take all metrics
+	physicalDisksPerformance(dellDiskStorageSMcliPath, dellDiskStorageCabineIPs)
+	virtualDisksPerformance(dellDiskStorageSMcliPath, dellDiskStorageCabineIPs)
 
 	// Start listen
 	log.Infoln("Listening on", *listenAddress)
