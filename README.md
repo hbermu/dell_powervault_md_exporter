@@ -1,4 +1,4 @@
-# Dell Disk Storage Exporter
+# Dell PowerVault MD Exporter
 
 Prometheus exporter for Dell PowerVault MD32/MD34/MD36/MD38 Series, in Go with pluggable metric collectors.
 
@@ -15,8 +15,8 @@ Supported Operating Systems:
 
 Building:
 ```
-go get github.com/hbermu/dellDiskStorage-Exporter
-cd ${GOPATH-$HOME/go}/src/github.com/hbermu/dellDiskStorage-Exporter
+go get github.com/hbermu/dell_powervault_md_exporter
+cd ${GOPATH-$HOME/go}/src/github.com/hbermu/dell_powervault_md_exporter
 go build -o dellDiskStorage-Exporter .
 ./dellDiskStorage-Exporter <flags>
 ```
