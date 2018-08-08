@@ -17,7 +17,7 @@ Building:
 ```
 go get github.com/hbermu/dell_powervault_md_exporter
 cd ${GOPATH-$HOME/go}/src/github.com/hbermu/dell_powervault_md_exporter
-go build -o dellDiskStorage-Exporter .
+go build -o dell_powervault_md_exporter .
 ./dellDiskStorage-Exporter <flags>
 ```
 
