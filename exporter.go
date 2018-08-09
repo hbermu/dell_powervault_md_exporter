@@ -161,7 +161,8 @@ func getRecords (binPath *string, ips *[]net.IP, command int) string{
 	log.Debugln("Running command")
 	err := cmd.Run()
 	if err != nil {
-		log.Warn("Error to execute command: ", err, out.String())
+		log.Warn("Error to execute command: ", err)
+		log.Warn("Output command:\n", out.String())
 		return ""
 	}
 
@@ -404,9 +405,11 @@ func main() {
 	go func() {
 		for {
 			physicalDisksPerformance(sMcliPath, cabinesIPs)
+			time.Sleep(1000 * time.Millisecond)
 			virtualDisksPerformance(sMcliPath, cabinesIPs)
+			time.Sleep(1000 * time.Millisecond)
 			physicalDisksSummary(sMcliPath, cabinesIPs)
-			time.Sleep(10000 * time.Millisecond)
+			time.Sleep(8000 * time.Millisecond)
 		}
 	}()
 
