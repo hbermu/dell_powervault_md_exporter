@@ -91,12 +91,16 @@ func newMetric(metricName string, docString string, labelNames []string) *promet
 }
 
 var (
-	// Register metrics for Physical Disks Perfomance
+	// Register metrics for Physical Disks Performance
 	metricPhysicalDisksLatency = newMetric(
 		"Physical_Disk_Latency",
 		"Delay from input into a system to desired outcome.",
 		[]string{"Enclosure", "Drawer", "Slot"})
-	// Register metrics for Virtual Disks Perfomance
+	metricPhysicalDisksStatus = newMetric(
+		"Physical_Disk_Status",
+		"Status physical disks. 1: OK, 0: Something Wrong",
+		[]string{"Enclosure", "Drawer", "Slot"})
+	// Register metrics for Virtual Disks Performance
 	metricVirtualDisksLatency = newMetric(
 		"Virtual_Disk_Latency",
 		"Delay from input into a system to desired outcome.",
@@ -109,12 +113,14 @@ var (
 		"Virtual_Disk_Speed",
 		"Speed at the disk is rotates.",
 		[]string{"Type", "Index"})
+
 )
 
 func init() {
 	// Register the summary and the histogram with Prometheus's default registry.
 		// Physical
 	prometheus.MustRegister(metricPhysicalDisksLatency)
+	prometheus.MustRegister(metricPhysicalDisksStatus)
 		// Virtual
 	prometheus.MustRegister(metricVirtualDisksLatency)
 	prometheus.MustRegister(metricVirtualDisksIO)
@@ -122,7 +128,7 @@ func init() {
 
 }
 
-func getRecords (binPath *string, ips *[]net.IP, command int) [][]string{
+func getRecords (binPath *string, ips *[]net.IP, command int) string{
 
 	// Array IPs -> String
 	log.Debugln("Transform Array IPs pointer to string")
@@ -140,8 +146,11 @@ func getRecords (binPath *string, ips *[]net.IP, command int) [][]string{
 	case 1:
 		cmd = exec.Command(binPathString, ipString, "-S", "-c", "show allvirtualdisks performancestats;" )
 		log.Debugf("Launch command: %v %v -S -c 'show allvirtualdisks performancestats;'", binPathString, ipString)
+	case 2:
+		cmd = exec.Command(binPathString, ipString, "-S", "-c", "show allphysicaldisks summary;" )
+		log.Debugf("Launch command: %v %v -S -c 'show allphysicaldisks summary;'", binPathString, ipString)
 	default:
-		return nil; log.Fatal("Wrong Command Index")
+		return ""; log.Fatal("Wrong Command Index")
 	}
 
 	// Create output buffer
@@ -150,19 +159,26 @@ func getRecords (binPath *string, ips *[]net.IP, command int) [][]string{
 
 	// Run command and take output
 	log.Debugln("Running command")
-
 	err := cmd.Run()
 	if err != nil {
-		log.Fatal("Error to execute command: ", err, out.String())
+		log.Warn("Error to execute command: ", err, out.String())
+		return ""
 	}
 
-	//////////////////
-	// Parse output //
-	//////////////////
+	// Output -> String
 	log.Debugln("Parse command output to string")
-	// Output -> []String
-		// The first line isn't CVS format
-	outString := strings.SplitN(out.String(),  "\n", 2)[1]
+	outString := out.String()
+	log.Debugln("Output command:\n", outString )
+
+	return outString
+
+}
+
+func parseRecords(out string) [][]string{
+
+	log.Debugln("Parse command output to [][]string CSV")
+	// The first line isn't CVS format
+	outString := strings.SplitN(out,  "\n", 2)[1]
 	log.Debugln("Output command:\n", outString )
 
 	// Create reader CSV
@@ -187,7 +203,12 @@ func physicalDisksPerformance(binPath *string, ips *[]net.IP) {
 
 	// Get all records
 	log.Infoln("Getting all Physical records")
-	records := getRecords(binPath, ips, 0)
+	output := getRecords(binPath, ips, 0)
+	if output == "" {
+		log.Warn("Waiting to repeat the petition")
+		return
+	}
+	records := parseRecords(output)
 
 	// For each row
 	for _, element := range records {
@@ -203,7 +224,7 @@ func physicalDisksPerformance(binPath *string, ips *[]net.IP) {
 			enclosure 	:= strings.Replace(object[2], ",", "", -1)
 			drawer 		:= strings.Replace(object[4], ",", "", -1)
 			slot 		:= strings.Replace(object[6], ",", "", -1)
-			log.Debugf("Enclosure: %v, Drawer: %v, Slot: %v", enclosure, drawer, slot)
+			log.Debugf("Physical -- Enclosure: %v, Drawer: %v, Slot: %v", enclosure, drawer, slot)
 
 			// Parse value to float 64
 			log.Debugln("Physical -- Parsing value to float 64")
@@ -221,15 +242,19 @@ func physicalDisksPerformance(binPath *string, ips *[]net.IP) {
 				slot).Set(value)
 		}
 	} // End for
-
-
+	log.Infoln("Getting all Physical records done")
 }
 
 func virtualDisksPerformance(binPath *string, ips *[]net.IP) {
 
 	// Get all records
 	log.Infoln("Getting all Virtual records")
-	records := getRecords(binPath, ips, 1)
+	output := getRecords(binPath, ips, 0)
+	if output == "" {
+		log.Warn("Virtual -- Waiting to repeat the petition")
+		return
+	}
+	records := parseRecords(getRecords(binPath, ips, 1))
 
 	// For each row
 	for _, element := range records {
@@ -287,7 +312,69 @@ func virtualDisksPerformance(binPath *string, ips *[]net.IP) {
 				numberDisk).Set(speed)
 		}
 	} // End for
+	log.Infoln("Getting all Virtual records done")
+}
 
+func physicalDisksSummary(binPath *string, ips *[]net.IP) {
+
+	// Get all records
+	log.Infoln("Getting Physical summary")
+	records := getRecords(binPath, ips, 2)
+	if records == "" {
+		log.Warn("Physical Status -- Waiting to repeat the petition")
+		return
+	}
+
+	// Split lines
+	log.Debugln("Physical Status -- Split all string")
+	recordsArray := strings.Split(records, "\n")
+
+	// Take number of disks
+	numberDisks, err := strconv.Atoi(strings.Split(recordsArray[1], " ")[7])
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Debugln("Physical Status -- Disks: ", numberDisks)
+
+	// Take all disks
+	for i := 8; i < (numberDisks + 8); i++ {
+		log.Debugln("Physical Status -- Parsing Row")
+		// Split for blank spaces " "
+		row := strings.Split(recordsArray[i], " ")
+		// Clean all "" positions
+		var rowClean []string
+		for _, str := range row {
+			if str != "" {
+				rowClean = append(rowClean, str)
+			}
+		}
+		log.Debugln("Physical Status -- Row: ", rowClean)
+
+		// Get Disk position
+		enclosure 	:= strings.Replace(rowClean[0], ",", "", -1)
+		drawer 		:= strings.Replace(rowClean[1], ",", "", -1)
+		slot 		:= rowClean[2]
+		log.Debugf("Physical Status -- Enclosure: %v, Drawer: %v, Slot: %v", enclosure, drawer, slot)
+
+		// Define Disk Status
+			// Prepare for update
+		var value float64
+		switch rowClean[3]{
+		case "Optimal":
+			value = 1
+		default:
+			value = -1
+		}
+		log.Debugln("Physical Status -- Value: ", value)
+
+		log.Debugln("Physical Status -- Adding values to Vector Metric")
+		// Latency
+		metricPhysicalDisksStatus.WithLabelValues(
+			enclosure,
+			drawer,
+			slot).Set(value)
+	}
+	log.Infoln("Getting all Physical Status done")
 }
 
 
@@ -317,15 +404,8 @@ func main() {
 	go func() {
 		for {
 			physicalDisksPerformance(sMcliPath, cabinesIPs)
-			log.Infoln("Getting all Physical records done")
-			time.Sleep(10000 * time.Millisecond)
-		}
-	}()
-
-	go func() {
-		for {
 			virtualDisksPerformance(sMcliPath, cabinesIPs)
-			log.Infoln("Getting all Virtual records done")
+			physicalDisksSummary(sMcliPath, cabinesIPs)
 			time.Sleep(10000 * time.Millisecond)
 		}
 	}()
