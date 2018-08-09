@@ -22,6 +22,7 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 	"bytes"
 
+	"time"
 )
 
 // Const
@@ -67,6 +68,10 @@ func romToDec (number string) string{
 		return "17"
 	case "XVIII":
 		return "18"
+	case "IXX":
+		return "19"
+	case "XX":
+		return "20"
 	}
 
 	log.Fatal("Wrong Roman Number")
@@ -85,40 +90,70 @@ func newMetric(metricName string, docString string, labelNames []string) *promet
 	)
 }
 
+var (
+	// Register metrics for Physical Disks Perfomance
+	metricPhysicalDisksLatency = newMetric(
+		"Physical_Disk_Latency",
+		"Delay from input into a system to desired outcome.",
+		[]string{"Enclosure", "Drawer", "Slot"})
+	// Register metrics for Virtual Disks Perfomance
+	metricVirtualDisksLatency = newMetric(
+		"Virtual_Disk_Latency",
+		"Delay from input into a system to desired outcome.",
+		[]string{"Type", "Index"})
+	metricVirtualDisksIO = newMetric(
+		"Virtual_Disk_IO",
+		"Input/Output operations on a physical disk.",
+		[]string{"Type", "Index"})
+	metricVirtualDisksSpeed = newMetric(
+		"Virtual_Disk_Speed",
+		"Speed at the disk is rotates.",
+		[]string{"Type", "Index"})
+)
+
+func init() {
+	// Register the summary and the histogram with Prometheus's default registry.
+		// Physical
+	prometheus.MustRegister(metricPhysicalDisksLatency)
+		// Virtual
+	prometheus.MustRegister(metricVirtualDisksLatency)
+	prometheus.MustRegister(metricVirtualDisksIO)
+	prometheus.MustRegister(metricVirtualDisksSpeed)
+
+}
+
 func getRecords (binPath *string, ips *[]net.IP, command int) [][]string{
 
 	// Array IPs -> String
 	log.Debugln("Transform Array IPs pointer to string")
 	ipString := strings.Trim(strings.Replace(fmt.Sprint(*ips), " ", " ", -1), "[]")
-	log.Infoln("Storage MD IPs:", ipString)
 	log.Debugln("Transform binary path pointer to string")
 	binPathString := *binPath
-	log.Infoln("Binary path:", binPathString)
 
 	// Prepare Command
 	log.Debugln("Prepare cmd command to launch")
 	var cmd *exec.Cmd
 	switch command{
 	case 0:
-		cmd = exec.Command("/bin/sh", binPathString, ipString, "-S", "-c 'show allphysicaldisks performancestats;'" )
-		log.Debugf("Launch command: /bin/sh %v %v -S -c 'show allphysicaldisks performancestats;'", binPathString, ipString)
+		cmd = exec.Command(binPathString, ipString, "-S", "-c", "show allphysicaldisks performancestats;")
+		log.Debugf("Launch command: %v %v -S -c 'show allphysicaldisks performancestats;'", binPathString, ipString)
 	case 1:
-		cmd = exec.Command("/bin/sh", binPathString, ipString, "-S", "-c 'show allvirtualdisks performancestats;'" )
-		log.Debugf("Launch command: /bin/sh %v %v -S -c 'show allvirtualdisks performancestats;'", binPathString, ipString)
+		cmd = exec.Command(binPathString, ipString, "-S", "-c", "show allvirtualdisks performancestats;" )
+		log.Debugf("Launch command: %v %v -S -c 'show allvirtualdisks performancestats;'", binPathString, ipString)
 	default:
 		return nil; log.Fatal("Wrong Command Index")
 	}
 
-	// Create buffer
+	// Create output buffer
 	var out bytes.Buffer
 	cmd.Stdout = &out
 
 	// Run command and take output
 	log.Debugln("Running command")
-	//out, err := cmd.Output()
+
 	err := cmd.Run()
 	if err != nil {
-		log.Fatal("Error to execute command: ", err)
+		log.Fatal("Error to execute command: ", err, out.String())
 	}
 
 	//////////////////
@@ -126,10 +161,8 @@ func getRecords (binPath *string, ips *[]net.IP, command int) [][]string{
 	//////////////////
 	log.Debugln("Parse command output to string")
 	// Output -> []String
-	//outString := out.String()
-
+		// The first line isn't CVS format
 	outString := strings.SplitN(out.String(),  "\n", 2)[1]
-	//log.Debugln("Output command:\n", strings.SplitN(outString,  "\n", 2)[1])
 	log.Debugln("Output command:\n", outString )
 
 	// Create reader CSV
@@ -145,7 +178,6 @@ func getRecords (binPath *string, ips *[]net.IP, command int) [][]string{
 
 	log.Debugln("CSV: \n", records)
 
-
 	// And returns them
 	return records
 
@@ -153,49 +185,40 @@ func getRecords (binPath *string, ips *[]net.IP, command int) [][]string{
 
 func physicalDisksPerformance(binPath *string, ips *[]net.IP) {
 
-	// Register new metric type
-	log.Infoln("Register metrics for Physical Disks Perfomance")
-	metricPhysicalDisksLatency := newMetric(
-		"Physical_Disk_Latency",
-		"Delay from input into a system to desired outcome.",
-		[]string{"Enclosure", "Drawer", "Slot"})
-	prometheus.MustRegister(metricPhysicalDisksLatency)
-
 	// Get all records
-	log.Infoln("Getting al records")
+	log.Infoln("Getting all Physical records")
 	records := getRecords(binPath, ips, 0)
 
 	// For each row
-	log.Infoln("Analyze all records")
 	for _, element := range records {
 
 		// Split the first element to take only the object we want
-		log.Debugln("Split first string")
+		log.Debugln("Physical -- Split first string")
 		object := strings.Split(element[0], " ")
-		log.Debugln("Object:", object[0])
+		log.Debugln("Physical -- Object:", object[0])
 		if object[0] == "Expansion" {
 
 			// Take parameters witch we want
-			log.Infoln("Taking parameters for object", object)
+			log.Debugln("Physical -- Taking parameters for object", object)
 			enclosure 	:= strings.Replace(object[2], ",", "", -1)
 			drawer 		:= strings.Replace(object[4], ",", "", -1)
 			slot 		:= strings.Replace(object[6], ",", "", -1)
 			log.Debugf("Enclosure: %v, Drawer: %v, Slot: %v", enclosure, drawer, slot)
 
 			// Parse value to float 64
-			log.Debugln("Parsing value to float 64")
+			log.Debugln("Physical -- Parsing value to float 64")
 			value, err := strconv.ParseFloat(element[1], 64)
 			if err != nil {
 				log.Fatal(err)
 			}
-			log.Debugln("Value: ", value)
+			log.Debugln("Physical -- Value: ", value)
 
 			// Add value to the metrics vector
-			log.Infoln("Adding value to Vector Metric")
+			log.Debugln("Physical -- Adding value to Vector Metric")
 			metricPhysicalDisksLatency.WithLabelValues(
 				enclosure,
 				drawer,
-				slot).Add(value)
+				slot).Set(value)
 		}
 	} // End for
 
@@ -204,83 +227,64 @@ func physicalDisksPerformance(binPath *string, ips *[]net.IP) {
 
 func virtualDisksPerformance(binPath *string, ips *[]net.IP) {
 
-	// Register new metric type
-	log.Infoln("Register metrics for Physical Disks Perfomance")
-	metricVirtualDisksLatency := newMetric(
-		"Virtual_Disk_Latency",
-		"Delay from input into a system to desired outcome.",
-		[]string{"Type", "Index"})
-	metricVirtualDisksIO := newMetric(
-		"Virtual_Disk_IO",
-		"Input/Output operations on a physical disk.",
-		[]string{"Type", "Index"})
-	metricVirtualDisksSpeed := newMetric(
-		"Virtual_Disk_Speed",
-		"Speed at the disk is rotates.",
-		[]string{"Type", "Index"})
-	prometheus.MustRegister(metricVirtualDisksIO)
-	prometheus.MustRegister(metricVirtualDisksLatency)
-	prometheus.MustRegister(metricVirtualDisksSpeed)
-
 	// Get all records
-	log.Infoln("Getting al records")
+	log.Infoln("Getting all Virtual records")
 	records := getRecords(binPath, ips, 1)
 
 	// For each row
-	log.Infoln("Analyze all records")
 	for _, element := range records {
 
 		// Split the first element to take only the object we want
-		log.Debugln("Split first string")
+		log.Debugln("Virtual -- Split first string")
 		object := strings.Split(element[0], " ")
-		log.Debugln("Object:", object[0])
+		log.Debugln("Virtual -- Object:", object[0])
 		if object[0] == "Virtual" {
 
-			log.Infoln("Taking parameters for object", object)
-			log.Debugln("Split Disk Name")
+			log.Debugln("Virtual -- Taking parameters for object", object)
+			log.Debugln("Virtual -- Split Disk Name")
 			disk := strings.Split(object[2], "_")
 
 			// Take parameters witch we want
-			log.Infoln("Identify Disk type and number")
+			log.Debugln("Virtual -- Identify Disk type and number")
 			typeDisk 	:= disk[1]
 			numberDisk 	:= romToDec(disk[2])
-			log.Debugf("Disk Type: %v, Number: %v", typeDisk, numberDisk)
+			log.Debugf("Virtual -- Disk Type: %v, Number: %v", typeDisk, numberDisk)
 
 			// Parse value to float 64
-			log.Debugln("Parsing values to float 64")
+			log.Debugln("Virtual -- Parsing values to float 64")
 				// Latency
 			latency, err := strconv.ParseFloat(element[14], 64)
 			if err != nil {
 				log.Fatal(err)
 			}
-			log.Debugln("Latency:", latency)
+			log.Debugln("Virtual -- Latency:", latency)
 				// IO
 			ioCurrent, err := strconv.ParseFloat(element[8], 64)
 			if err != nil {
 				log.Fatal(err)
 			}
-			log.Debugln("IO Current:", ioCurrent)
+			log.Debugln("Virtual -- IO Current:", ioCurrent)
 				// Speed
 			speed, err := strconv.ParseFloat(element[6], 64)
 			if err != nil {
 				log.Fatal(err)
 			}
-			log.Debugln("Speed:", speed)
+			log.Debugln("Virtual -- Speed:", speed)
 
 			// Add value to the metrics vector
-			log.Infoln("Adding values to Vector Metric")
+			log.Debugln("Virtual -- Adding values to Vector Metric")
 				// Latency
 			metricVirtualDisksLatency.WithLabelValues(
 				typeDisk,
-				numberDisk).Add(latency)
+				numberDisk).Set(latency)
 				// IO
-			metricVirtualDisksLatency.WithLabelValues(
+			metricVirtualDisksIO.WithLabelValues(
 				typeDisk,
-				numberDisk).Add(ioCurrent)
+				numberDisk).Set(ioCurrent)
 				// Speed
-			metricVirtualDisksLatency.WithLabelValues(
+			metricVirtualDisksSpeed.WithLabelValues(
 				typeDisk,
-				numberDisk).Add(speed)
+				numberDisk).Set(speed)
 		}
 	} // End for
 
@@ -299,17 +303,32 @@ func main() {
 
 	// Check flags
 	log.AddFlags(kingpin.CommandLine)
-	kingpin.Version(version.Print("dell_powervault_md_exporterr"))
+	kingpin.Version(version.Print("dell_powervault_md_exporter"))
 	kingpin.HelpFlag.Short('d')
 	kingpin.Parse()
 
 	// Log Start
 	log.Infoln("Starting dell_powervault_md_exporterr", version.Info())
 	log.Infoln("Build context", version.BuildContext())
+	log.Infoln("Storage MD IPs:", *cabinesIPs)
+	log.Infoln("Binary path:", *sMcliPath)
 
-	// Take all metrics
-	physicalDisksPerformance(sMcliPath, cabinesIPs)
-	virtualDisksPerformance(sMcliPath, cabinesIPs)
+
+	go func() {
+		for {
+			physicalDisksPerformance(sMcliPath, cabinesIPs)
+			log.Infoln("Getting all Physical records done")
+			time.Sleep(10000 * time.Millisecond)
+		}
+	}()
+
+	go func() {
+		for {
+			virtualDisksPerformance(sMcliPath, cabinesIPs)
+			log.Infoln("Getting all Virtual records done")
+			time.Sleep(10000 * time.Millisecond)
+		}
+	}()
 
 	// Start listen
 	log.Infoln("Listening on", *listenAddress)
