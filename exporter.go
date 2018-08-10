@@ -1,9 +1,3 @@
-// +Version   = "0.0.1"
-// +Revision  = "08/08/2018"
-// +Branch    = "master"
-// +BuildUser = "hbermu"
-// +BuildDate = "08/08/2018"
-
 package main
 
 import (
@@ -23,15 +17,14 @@ import (
 	"bytes"
 
 	"time"
-	"runtime"
-)
+	)
 
 // Const
 const (
 	namespace 	= "dell_powervault_md_exporter" // For Prometheus metrics.
-	Version   	= "0.0.1"
-	Revision  	= "09/08/2018"
-	Branch    	= "master"
+	//Version   	= "0.0.1"
+	//Revision  	= "09/08/2018"
+	//Branch    	= "master"
 	//BuildUser 	= "hbermu"
 	//BuildDate 	= "09/08/2018"
 )
@@ -131,20 +124,6 @@ func init() {
 	prometheus.MustRegister(metricVirtualDisksLatency)
 	prometheus.MustRegister(metricVirtualDisksIO)
 	prometheus.MustRegister(metricVirtualDisksSpeed)
-
-	// Build Info Program
-	buildInfo := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "build_info",
-			Help: fmt.Sprintf(
-				"A metric with a constant '1' value labeled by version, revision, branch, and goversion from which %s was built.",
-				namespace,
-			),
-		},
-		[]string{"version", "revision", "branch", "goversion"},
-	)
-	buildInfo.WithLabelValues(Version, Revision, Branch, runtime.Version()).Set(1)
 
 }
 
@@ -270,7 +249,7 @@ func virtualDisksPerformance(binPath *string, ips *[]net.IP) {
 
 	// Get all records
 	log.Infoln("Getting all Virtual records")
-	output := getRecords(binPath, ips, 0)
+	output := getRecords(binPath, ips, 1)
 	if strings.EqualFold(output, "") {
 		log.Warn("Virtual -- Waiting to repeat the petition")
 		return
@@ -430,7 +409,7 @@ func main() {
 			physicalDisksPerformance(sMcliPath, cabinesIPs)
 			virtualDisksPerformance(sMcliPath, cabinesIPs)
 			physicalDisksSummary(sMcliPath, cabinesIPs)
-			log.Debugf("Waiting %v until next petitions", timeEach.String())
+			log.Infof("Waiting %v until next petitions", timeEach.String())
 			time.Sleep(delay)
 		}
 	}()
