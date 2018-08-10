@@ -1,0 +1,23 @@
+
+Prometheus exporter for Dell PowerVault MD32/MD34/MD36/MD38 Series
+Copyright 2018 Hector Bermudez Perez
+
+This product includes software developed at
+SoundCloud Ltd. (http://soundcloud.com/).
+
+The following components are included in this product:
+
+Common libraries shared by Prometheus Go components.
+https://github.com/prometheus/common
+Copyright 2015 The Prometheus Authors
+Licensed under Apache 2.0, Version 2.0
+
+Prometheus instrumentation library for Go applications
+https://github.com/prometheus/client_golang
+Copyright 2015 The Prometheus Authors
+Licensed under Apache 2.0, Version 2.0
+
+Kingpin
+https://github.com/alecthomas/kingpin
+Copyright 2014 Alec Thomas
+Licensed under the MIT License
