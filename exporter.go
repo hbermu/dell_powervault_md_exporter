@@ -1,4 +1,4 @@
-// +Version   = "0"
+// +Version   = "0.0.1"
 // +Revision  = "08/08/2018"
 // +Branch    = "master"
 // +BuildUser = "hbermu"
@@ -23,11 +23,17 @@ import (
 	"bytes"
 
 	"time"
+	"runtime"
 )
 
 // Const
 const (
-	namespace = "dell_powervault_md_exporter" // For Prometheus metrics.
+	namespace 	= "dell_powervault_md_exporter" // For Prometheus metrics.
+	Version   	= "0.0.1"
+	Revision  	= "09/08/2018"
+	Branch    	= "master"
+	//BuildUser 	= "hbermu"
+	//BuildDate 	= "09/08/2018"
 )
 
 func romToDec (number string) string{
@@ -126,6 +132,20 @@ func init() {
 	prometheus.MustRegister(metricVirtualDisksIO)
 	prometheus.MustRegister(metricVirtualDisksSpeed)
 
+	// Build Info Program
+	buildInfo := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "build_info",
+			Help: fmt.Sprintf(
+				"A metric with a constant '1' value labeled by version, revision, branch, and goversion from which %s was built.",
+				namespace,
+			),
+		},
+		[]string{"version", "revision", "branch", "goversion"},
+	)
+	buildInfo.WithLabelValues(Version, Revision, Branch, runtime.Version()).Set(1)
+
 }
 
 func getRecords (binPath *string, ips *[]net.IP, command int) string{
@@ -205,7 +225,7 @@ func physicalDisksPerformance(binPath *string, ips *[]net.IP) {
 	// Get all records
 	log.Infoln("Getting all Physical records")
 	output := getRecords(binPath, ips, 0)
-	if output == "" {
+	if strings.EqualFold(output, "") {
 		log.Warn("Waiting to repeat the petition")
 		return
 	}
@@ -251,7 +271,7 @@ func virtualDisksPerformance(binPath *string, ips *[]net.IP) {
 	// Get all records
 	log.Infoln("Getting all Virtual records")
 	output := getRecords(binPath, ips, 0)
-	if output == "" {
+	if strings.EqualFold(output, "") {
 		log.Warn("Virtual -- Waiting to repeat the petition")
 		return
 	}
@@ -321,7 +341,7 @@ func physicalDisksSummary(binPath *string, ips *[]net.IP) {
 	// Get all records
 	log.Infoln("Getting Physical summary")
 	records := getRecords(binPath, ips, 2)
-	if records == "" {
+	if strings.EqualFold(records, "") {
 		log.Warn("Physical Status -- Waiting to repeat the petition")
 		return
 	}
@@ -382,10 +402,11 @@ func physicalDisksSummary(binPath *string, ips *[]net.IP) {
 func main() {
 
 	var (
-		listenAddress	= kingpin.Flag("listen-address", "Address to listen on for web interface and telemetry.").Default(":9362").String()
-		metricsPath		= kingpin.Flag("telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+		listenAddress	= kingpin.Flag("port", "Port to listen on for web interface and telemetry.").Short('p').Default(":9362").String()
+		metricsPath		= kingpin.Flag("telemetry-path", "Path under which to expose metrics.").Short('m').Default("/metrics").String()
 		cabinesIPs		= kingpin.Flag("IP", "IPs Dell Cabine Storage. Example: '--IP=172.19.0.1 --IP=172.0.0.1'").Default("172.0.0.1").IPList()
 		sMcliPath		= kingpin.Flag("SMcliPath", "SMcli binary path").Default("/opt/dell/mdstoragesoftware/mdstoragemanager/client/SMcli").String()
+		timeEach		= kingpin.Flag("time", "Time between petitions").Default("30s").Duration()
 
 	)
 
@@ -401,15 +422,16 @@ func main() {
 	log.Infoln("Storage MD IPs:", *cabinesIPs)
 	log.Infoln("Binary path:", *sMcliPath)
 
+	// Transform time
+	delay := *timeEach
 
 	go func() {
 		for {
 			physicalDisksPerformance(sMcliPath, cabinesIPs)
-			time.Sleep(1000 * time.Millisecond)
 			virtualDisksPerformance(sMcliPath, cabinesIPs)
-			time.Sleep(1000 * time.Millisecond)
 			physicalDisksSummary(sMcliPath, cabinesIPs)
-			time.Sleep(8000 * time.Millisecond)
+			log.Debugf("Waiting %v until next petitions", timeEach.String())
+			time.Sleep(delay)
 		}
 	}()
 
