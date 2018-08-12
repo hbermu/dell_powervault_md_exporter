@@ -272,7 +272,7 @@ func virtualDisksPerformance(binPath *string, ips *[]net.IP) {
 		log.Warn("Virtual -- Waiting to repeat the petition")
 		return
 	}
-	records := parseRecords(getRecords(binPath, ips, 1))
+	records := parseRecords(output)
 
 	// For each row
 	for _, element := range records {
