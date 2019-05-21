@@ -286,48 +286,49 @@ func virtualDisksPerformance(binPath *string, ips *[]net.IP) {
 			log.Debugln("Virtual -- Taking parameters for object", object)
 			log.Debugln("Virtual -- Split Disk Name")
 			disk := strings.Split(object[2], "_")
-
-			// Take parameters witch we want
-			log.Debugln("Virtual -- Identify Disk type and number")
-			typeDisk 	:= disk[1]
-			numberDisk 	:= romToDec(disk[2])
-			log.Debugf("Virtual -- Disk Type: %v, Number: %v", typeDisk, numberDisk)
-
-			// Parse value to float 64
-			log.Debugln("Virtual -- Parsing values to float 64")
-				// Latency
-			latency, err := strconv.ParseFloat(element[14], 64)
-			if err != nil {
-				log.Fatal(err)
+			if (len(disk) == 3) {
+				// Take parameters witch we want
+				log.Debugln("Virtual -- Identify Disk type and number")
+				typeDisk 	:= disk[1]
+				numberDisk 	:= romToDec(disk[2])
+				log.Debugf("Virtual -- Disk Type: %v, Number: %v", typeDisk, numberDisk)
+				
+				// Parse value to float 64
+				log.Debugln("Virtual -- Parsing values to float 64")
+					// Latency
+				latency, err := strconv.ParseFloat(element[14], 64)
+				if err != nil {
+					log.Fatal(err)
+				}
+				log.Debugln("Virtual -- Latency:", latency)
+					// IO
+				ioCurrent, err := strconv.ParseFloat(element[8], 64)
+				if err != nil {
+					log.Fatal(err)
+				}
+				log.Debugln("Virtual -- IO Current:", ioCurrent)
+					// Speed
+				speed, err := strconv.ParseFloat(element[6], 64)
+				if err != nil {
+					log.Fatal(err)
+				}
+				log.Debugln("Virtual -- Speed:", speed)
+				
+				// Add value to the metrics vector
+				log.Debugln("Virtual -- Adding values to Vector Metric")
+					// Latency
+				metricVirtualDisksLatency.WithLabelValues(
+					typeDisk,
+					numberDisk).Set(latency)
+					// IO
+				metricVirtualDisksIO.WithLabelValues(
+					typeDisk,
+					numberDisk).Set(ioCurrent)
+					// Speed
+				metricVirtualDisksSpeed.WithLabelValues(
+					typeDisk,
+					numberDisk).Set(speed)
 			}
-			log.Debugln("Virtual -- Latency:", latency)
-				// IO
-			ioCurrent, err := strconv.ParseFloat(element[8], 64)
-			if err != nil {
-				log.Fatal(err)
-			}
-			log.Debugln("Virtual -- IO Current:", ioCurrent)
-				// Speed
-			speed, err := strconv.ParseFloat(element[6], 64)
-			if err != nil {
-				log.Fatal(err)
-			}
-			log.Debugln("Virtual -- Speed:", speed)
-
-			// Add value to the metrics vector
-			log.Debugln("Virtual -- Adding values to Vector Metric")
-				// Latency
-			metricVirtualDisksLatency.WithLabelValues(
-				typeDisk,
-				numberDisk).Set(latency)
-				// IO
-			metricVirtualDisksIO.WithLabelValues(
-				typeDisk,
-				numberDisk).Set(ioCurrent)
-				// Speed
-			metricVirtualDisksSpeed.WithLabelValues(
-				typeDisk,
-				numberDisk).Set(speed)
 		}
 	} // End for
 	log.Infoln("Getting all Virtual records done")
